@@ -1,0 +1,14 @@
+<idea-plugin>
+    <id>com.timerail</id>
+    <name>TimeRail</name>
+    <vendor>YourCompany</vendor>
+
+    <extensions defaultExtensionNs="com.intellij">
+
+        <toolWindow
+                id="TimeRail"
+                anchor="left"
+                factoryClass="com.timerail.TimeRailToolWindowFactory"/>
+    </extensions>
+
+</idea-plugin>
