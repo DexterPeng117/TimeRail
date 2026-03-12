@@ -47,17 +47,17 @@ private class TimeRailUI(private val project: Project) {
     private var popupW: Int = 1100
     private var popupH: Int = 720
 
-    // 真半透明（0~255）
+    // (0~255）
     private val popupAlpha = 90        // 背景透明度（更透明就更小）
     private val cardAlpha = 80         // 卡片底透明度
     private val hintAlpha = 200
 
-    // ---- debounce (可选保留：避免极端输入频率下 UI 频繁刷新) ----
+    // ---- debounce
     private val debounceMs = 200
     private var refreshTimer: Timer? = null
 
     // ---- line-based record rule ----
-    // 规则：以“基准行 baseLine”为准；当一次输入发生在 != baseLine 的行，就记录一次并更新 baseLine
+    //
     private var baseLine: Int? = null
 
     val component: JComponent = buildToolWindow()
@@ -97,10 +97,10 @@ private class TimeRailUI(private val project: Project) {
             startBtn.isEnabled = false
             stopBtn.isEnabled = true
 
-            // 初始化 baseLine：当前光标所在行
+            // init baseLine：
             baseLine = currentCaretLine()
 
-            // 记录初始状态（可选，但一般很有用）
+            // recording
             val editor = FileEditorManager.getInstance(project).selectedTextEditor
             val doc = editor?.document
             val file = doc?.let { FileDocumentManager.getInstance().getFile(it) }
@@ -133,7 +133,7 @@ private class TimeRailUI(private val project: Project) {
         }
     }
 
-    // ===== POPUP UI (横向 + 半透明 + 大卡片) =====
+    // ===== POPUP UI  =====
 
     private fun showPopup() {
         val (w, h) = computePopupSize75Percent()
@@ -151,14 +151,14 @@ private class TimeRailUI(private val project: Project) {
             .setCancelOnClickOutside(true)
             .createPopup()
 
-        // 设定初始大小：75% IDE窗口
+        // 75% IDE window
         popup!!.setSize(Dimension(popupW, popupH))
         popup!!.showInFocusCenter()
         openBtn.text = "Hide"
     }
 
     private fun refreshPopupNow() {
-        // 最稳：关掉再打开（避免旧组件残留导致点击/渲染问题）
+        //
         val wasVisible = popup?.isVisible == true
         if (!wasVisible) return
         popup?.cancel()
@@ -175,10 +175,7 @@ private class TimeRailUI(private val project: Project) {
         }.apply { isRepeats = false; start() }
     }
 
-    /**
-     * 横向时间线：每张卡片很大（接近 popup 的 3/4）
-     * 真半透明：根面板自己画 alpha，子组件全部 isOpaque=false
-     */
+
     private fun buildHorizontalTimeline(w: Int, h: Int): JComponent {
         val overlay = TranslucentPanel(popupAlpha).apply {
             layout = BorderLayout()
@@ -282,23 +279,23 @@ private class TimeRailUI(private val project: Project) {
                 val path = file.path
                 val name = file.name
 
-                // 找到触发事件的 editor（优先拿绑定这个 document 的 editor）
+                // find editor (document 的 editor）
                 val editor = findEditorForDocument(event.document) ?: FileEditorManager.getInstance(project).selectedTextEditor
                 val caretLine = editor?.caretModel?.primaryCaret?.logicalPosition?.line
 
-                // 没拿到行就不记录（避免乱存）
+                //
                 if (caretLine == null) return
 
-                // 初始化 baseLine
+                // baseLine
                 if (baseLine == null) baseLine = caretLine
 
-                // ✅ 新规则：当一次输入发生在 != baseLine 的行，就记录一次并更新 baseLine
+                //  update baseLine
                 if (caretLine != baseLine) {
                     baseLine = caretLine
                     val preview = capturePreview(editor)
                     TimeRailRecorder.addSnapshot(path, name, event.document.text, preview)
 
-                    // popup 若打开则刷新（保证新卡片能点能看）
+                    // popup
                     refreshPopupDebounced()
                 }
             }
@@ -327,7 +324,7 @@ private class TimeRailUI(private val project: Project) {
         val img = BufferedImage(srcW, srcH, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()
         try {
-            // 更清晰一点
+            //
             g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
             g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
             comp.paint(g)
@@ -359,7 +356,7 @@ private class TimeRailUI(private val project: Project) {
             val h = (c.height * 0.75).toInt().coerceAtLeast(650)
             return w to h
         }
-        // fallback：屏幕
+        // fallback
         val screen = Toolkit.getDefaultToolkit().screenSize
         val w = (screen.width * 0.75).toInt().coerceAtLeast(1000)
         val h = (screen.height * 0.75).toInt().coerceAtLeast(650)
