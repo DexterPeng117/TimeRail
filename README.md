@@ -18,7 +18,7 @@ When you want to review your history, click **Open** to bring up a translucent o
 
 ## Demo
 
-*Coming soon — GIF walkthrough of the timeline UI*
+![TimeRail Demo](assets/demo.gif)
 
 ## Tech Stack
 
