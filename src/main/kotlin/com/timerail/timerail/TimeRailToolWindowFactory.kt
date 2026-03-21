@@ -20,6 +20,7 @@ import com.intellij.ui.content.ContentFactory
 import java.awt.*
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import java.awt.geom.Path2D
 import java.awt.image.BufferedImage
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -140,7 +141,7 @@ private class TimeRailUI(private val project: Project) {
         popupW = w
         popupH = h
 
-        val content = buildHorizontalTimeline(popupW, popupH)
+        val content = buildTreeTimeline(popupW, popupH)
 
         popup = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(content, null)
@@ -176,95 +177,221 @@ private class TimeRailUI(private val project: Project) {
     }
 
 
-    private fun buildHorizontalTimeline(w: Int, h: Int): JComponent {
+    private fun buildTreeTimeline(w: Int, h: Int): JComponent {
         val overlay = TranslucentPanel(popupAlpha).apply {
             layout = BorderLayout()
             border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
             isOpaque = false
         }
 
+        // Zoom buttons
+        fun zoomBtn(label: String): JButton = JButton(label).apply {
+            font = font.deriveFont(Font.BOLD, 13f)
+            isFocusable = false
+            isOpaque = false
+            preferredSize = Dimension(32, 26)
+        }
+        val zoomInBtn  = zoomBtn("+")
+        val zoomOutBtn = zoomBtn("-")
+        val zoomResetBtn = zoomBtn("1x")
+
+        val zoomPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+            isOpaque = false
+            add(zoomOutBtn)
+            add(zoomResetBtn)
+            add(zoomInBtn)
+        }
+
         val titleBar = JPanel(BorderLayout()).apply {
             isOpaque = false
-            border = BorderFactory.createEmptyBorder(0, 0, 8, 0)
-            add(JBLabel("TimeRail").apply {
+            border = BorderFactory.createEmptyBorder(0, 0, 10, 0)
+            add(JBLabel("TimeRail - Branch History").apply {
                 foreground = Color(240, 240, 240, 220)
                 font = font.deriveFont(Font.BOLD, 16f)
             }, BorderLayout.WEST)
+            add(zoomPanel, BorderLayout.EAST)
         }
         overlay.add(titleBar, BorderLayout.NORTH)
 
-        val cardsRow = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.X_AXIS)
+        val snaps = TimeRailRecorder.allSnapshots()
+        val nodeW = 220
+        val nodeH = 160
+        val gapX  = 48
+        val gapY  = 72
+        val pad   = 20
+
+        // Group by branch, sorted
+        val branches = snaps.groupBy { it.branchId }.toSortedMap()
+
+        // Calculate (x, y) for each snapshot id
+        val posMap = mutableMapOf<Int, Point>()
+        for ((_, branchSnaps) in branches) {
+            val first = branchSnaps.first()
+            val xStart = if (first.parentId == null) {
+                pad
+            } else {
+                val parentPos = posMap[first.parentId]
+                (parentPos?.x ?: pad) + nodeW + gapX
+            }
+            val y = pad + first.branchId * (nodeH + gapY)
+            branchSnaps.forEachIndexed { i, snap ->
+                posMap[snap.id] = Point(xStart + i * (nodeW + gapX), y)
+            }
+        }
+
+        val canvasW = (posMap.values.maxOfOrNull { it.x } ?: pad) + nodeW + pad
+        val canvasH = (posMap.values.maxOfOrNull { it.y } ?: pad) + nodeH + pad
+
+        var scale = 1.4
+
+        // Everything is drawn inside paintComponent — no child components needed.
+        // This makes zoom reliable: canvas.preferredSize drives the scroll range directly.
+        val canvas = object : JPanel(), Scrollable {
+            override fun getPreferredScrollableViewportSize() = Dimension(600, 400)
+            override fun getScrollableTracksViewportWidth()   = false
+            override fun getScrollableTracksViewportHeight()  = false
+            override fun getScrollableUnitIncrement(vr: Rectangle, o: Int, d: Int)  = 20
+            override fun getScrollableBlockIncrement(vr: Rectangle, o: Int, d: Int) = 100
+
+            override fun paintComponent(g: Graphics) {
+                super.paintComponent(g)
+                val g2 = g.create() as Graphics2D
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,    RenderingHints.VALUE_ANTIALIAS_ON)
+                    g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,   RenderingHints.VALUE_INTERPOLATION_BILINEAR)
+                    g2.scale(scale, scale)
+
+                    // --- connecting lines ---
+                    g2.stroke = BasicStroke((1.5 / scale).toFloat())
+                    g2.color  = Color(200, 200, 200, 130)
+                    for ((_, branchSnaps) in branches) {
+                        for (i in 0 until branchSnaps.size - 1) {
+                            val p1 = posMap[branchSnaps[i].id]     ?: continue
+                            val p2 = posMap[branchSnaps[i + 1].id] ?: continue
+                            g2.drawLine(p1.x + nodeW, p1.y + nodeH / 2, p2.x, p2.y + nodeH / 2)
+                        }
+                        val first = branchSnaps.first()
+                        if (first.parentId != null) {
+                            val pp = posMap[first.parentId] ?: continue
+                            val cp = posMap[first.id]       ?: continue
+                            val x1 = pp.x + nodeW / 2;  val y1 = pp.y + nodeH
+                            val x2 = cp.x;               val y2 = cp.y + nodeH / 2
+                            val path = Path2D.Float()
+                            path.moveTo(x1.toFloat(), y1.toFloat())
+                            path.curveTo(x1.toFloat(), ((y1+y2)/2).toFloat(),
+                                         x2.toFloat(), ((y1+y2)/2).toFloat(),
+                                         x2.toFloat(), y2.toFloat())
+                            g2.draw(path)
+                        }
+                    }
+
+                    // --- cards ---
+                    for (snap in snaps) {
+                        val pos = posMap[snap.id] ?: continue
+                        val cx = pos.x;  val cy = pos.y
+                        val gc = g2.create() as Graphics2D
+                        // card background
+                        gc.composite = AlphaComposite.SrcOver
+                        gc.color = Color(30, 30, 30, cardAlpha)
+                        gc.fillRoundRect(cx, cy, nodeW, nodeH, 14, 14)
+                        gc.color = Color(220, 220, 220, 80)
+                        gc.stroke = BasicStroke((1f / scale).toFloat())
+                        gc.drawRoundRect(cx, cy, nodeW, nodeH, 14, 14)
+                        // preview image
+                        val rawImg = snap.preview?.image
+                        if (rawImg != null) {
+                            val iw = rawImg.getWidth(null); val ih = rawImg.getHeight(null)
+                            if (iw > 0 && ih > 0) {
+                                val imgW = nodeW - 16;  val imgH = nodeH - 30
+                                val s  = minOf(imgW.toDouble() / iw, imgH.toDouble() / ih)
+                                val dw = (iw * s).toInt().coerceAtLeast(1)
+                                val dh = (ih * s).toInt().coerceAtLeast(1)
+                                val dx = cx + 8 + (imgW - dw) / 2
+                                val dy = cy + 6 + (imgH - dh) / 2
+                                gc.drawImage(rawImg, dx, dy, dw, dh, null)
+                            }
+                        }
+                        gc.dispose()
+                    }
+                } finally {
+                    g2.dispose()
+                }
+            }
+        }.apply {
             isOpaque = false
+            preferredSize = Dimension((canvasW * scale).toInt(), (canvasH * scale).toInt())
         }
 
-        // 卡片尺寸：接近你说的“占编程界面 3/4”
-        val cardW = (w * 0.75).toInt().coerceAtLeast(900)
-        val cardH = (h * 0.78).toInt().coerceAtLeast(520)
+        // Click detection via coordinate hit-test (no child components)
+        canvas.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent) {
+                val mx = (e.x / scale).toInt()
+                val my = (e.y / scale).toInt()
+                for (snap in snaps) {
+                    val pos = posMap[snap.id] ?: continue
+                    if (mx in pos.x..(pos.x + nodeW) && my in pos.y..(pos.y + nodeH)) {
+                        TimeRailRecorder.applySnapshot(project, snap)
+                        statusLabel.text = "● B${snap.branchId} #${snap.id} restored @ ${snap.time}"
+                        popup?.cancel()
+                        popup = null
+                        openBtn.text = "Open"
+                        break
+                    }
+                }
+            }
+        })
+        canvas.addMouseMotionListener(object : java.awt.event.MouseMotionAdapter() {
+            override fun mouseMoved(e: MouseEvent) {
+                val mx = (e.x / scale).toInt(); val my = (e.y / scale).toInt()
+                val over = snaps.any { snap ->
+                    val pos = posMap[snap.id] ?: return@any false
+                    mx in pos.x..(pos.x + nodeW) && my in pos.y..(pos.y + nodeH)
+                }
+                canvas.cursor = if (over) Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                                else      Cursor.getDefaultCursor()
+            }
+        })
 
-        val n = TimeRailRecorder.snapshotCount()
-        for (i in 0 until n) {
-            val snap = TimeRailRecorder.snapshotAt(i) ?: continue
-            val card = buildBigCard(i, snap, cardW, cardH)
-            cardsRow.add(card)
-            cardsRow.add(Box.createHorizontalStrut(18))
+        fun updateLayout() {
+            canvas.preferredSize = Dimension((canvasW * scale).toInt(), (canvasH * scale).toInt())
+            canvas.revalidate()
+            canvas.repaint()
         }
 
-        val scroller = JBScrollPane(cardsRow).apply {
+        // Ctrl+scroll = zoom; plain scroll = forward to JScrollPane for normal panning
+        canvas.addMouseWheelListener { e ->
+            if (e.isControlDown || e.isMetaDown) {
+                val factor = if (e.wheelRotation < 0) 1.08 else 0.93
+                scale = (scale * factor).coerceIn(0.25, 3.0)
+                updateLayout()
+                e.consume()
+            } else {
+                val sp = SwingUtilities.getAncestorOfClass(JScrollPane::class.java, canvas)
+                sp?.dispatchEvent(SwingUtilities.convertMouseEvent(canvas, e, sp))
+            }
+        }
+
+        // Zoom buttons
+        zoomInBtn.addActionListener  { scale = (scale * 1.2).coerceAtMost(3.0);  updateLayout() }
+        zoomOutBtn.addActionListener { scale = (scale / 1.2).coerceAtLeast(0.25); updateLayout() }
+        zoomResetBtn.addActionListener { scale = 1.0; updateLayout() }
+
+        val scroller = JBScrollPane(canvas).apply {
             horizontalScrollBarPolicy = ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS
-            verticalScrollBarPolicy = ScrollPaneConstants.VERTICAL_SCROLLBAR_NEVER
+            verticalScrollBarPolicy   = ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS
             isOpaque = false
             viewport.isOpaque = false
             border = BorderFactory.createEmptyBorder()
         }
-
         overlay.add(scroller, BorderLayout.CENTER)
 
-        val hint = JBLabel("Rule: snapshot when you start typing on a different line than the current caret line.").apply {
+        val hint = JBLabel("Use +/- buttons or Ctrl+scroll to zoom  |  Click a card to restore  |  Restoring opens a new branch").apply {
             foreground = Color(230, 230, 230, hintAlpha)
             border = BorderFactory.createEmptyBorder(8, 2, 0, 2)
         }
         overlay.add(hint, BorderLayout.SOUTH)
 
         return overlay
-    }
-
-    private fun buildBigCard(index: Int, snap: TimeRailRecorder.Snapshot, w: Int, h: Int): JComponent {
-        val card = CardPanel(cardAlpha).apply {
-            layout = BorderLayout()
-            preferredSize = Dimension(w, h)
-            minimumSize = Dimension(w, h)
-            maximumSize = Dimension(w, h)
-            border = BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color(220, 220, 220, 80), 1, true),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)
-            )
-        }
-
-        val img = JLabel().apply {
-            horizontalAlignment = SwingConstants.CENTER
-            verticalAlignment = SwingConstants.CENTER
-            isOpaque = false
-            icon = scaledToFit(snap.preview, w - 24, h - 70)
-        }
-
-        val title = JBLabel("#$index  ${snap.fileName}  ${snap.time}").apply {
-            foreground = Color(240, 240, 240, 220)
-            border = BorderFactory.createEmptyBorder(10, 0, 0, 0)
-        }
-
-        card.add(img, BorderLayout.CENTER)
-        card.add(title, BorderLayout.SOUTH)
-
-        card.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        card.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
-                TimeRailRecorder.applySnapshot(project, snap)
-                statusLabel.text = "● Viewing ${snap.fileName} @ ${snap.time}"
-            }
-        })
-
-        return card
     }
 
     // ===== Recording logic (line-based) =====
@@ -335,17 +462,6 @@ private class TimeRailUI(private val project: Project) {
         return ImageIcon(img)
     }
 
-    private fun scaledToFit(icon: ImageIcon?, maxW: Int, maxH: Int): ImageIcon? {
-        if (icon == null) return null
-        val iw = icon.iconWidth.toDouble().coerceAtLeast(1.0)
-        val ih = icon.iconHeight.toDouble().coerceAtLeast(1.0)
-        val scale = minOf(maxW / iw, maxH / ih).coerceAtMost(1.0)
-        val nw = (iw * scale).toInt().coerceAtLeast(1)
-        val nh = (ih * scale).toInt().coerceAtLeast(1)
-        val img = icon.image.getScaledInstance(nw, nh, Image.SCALE_SMOOTH)
-        return ImageIcon(img)
-    }
-
     // ===== Popup size: 75% of IDE frame =====
 
     private fun computePopupSize75Percent(): Pair<Int, Int> {
@@ -404,11 +520,14 @@ private object TimeRailRecorder {
     @Volatile private var replaying = false
 
     fun start() { recording = true }
-    fun stop() { recording = false }
+    fun stop()  { recording = false }
     fun isRecording() = recording
     fun isReplaying() = replaying
 
     data class Snapshot(
+        val id: Int,
+        val parentId: Int?,   // id of snapshot we restored from (null = root of branch 0)
+        val branchId: Int,
         val path: String,
         val fileName: String,
         val content: String,
@@ -416,25 +535,32 @@ private object TimeRailRecorder {
         val preview: ImageIcon?
     )
 
-    private val snaps = mutableListOf<Snapshot>()
+    private val snaps      = mutableListOf<Snapshot>()
+    private var nextId     = 0
+    private var nextBranch = 1
+    private var curBranch  = 0
+    private var curParent: Int? = null   // parentId for the next snapshot added
 
-    fun clear() = snaps.clear()
-    fun snapshotCount() = snaps.size
-    fun snapshotAt(i: Int) = snaps.getOrNull(i)
+    fun clear() {
+        snaps.clear()
+        nextId     = 0
+        nextBranch = 1
+        curBranch  = 0
+        curParent  = null
+    }
+
+    fun allSnapshots(): List<Snapshot> = snaps.toList()
 
     fun addSnapshot(path: String, name: String, content: String, preview: ImageIcon?) {
         val ts = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-        snaps.add(Snapshot(path, name, content, ts, preview))
+        snaps.add(Snapshot(nextId++, curParent, curBranch, path, name, content, ts, preview))
+        curParent = null   // only the first snapshot in a new branch carries a parentId
     }
 
     fun applySnapshot(project: Project, s: Snapshot) {
-        val vFile =
-            com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-                .findFileByPath(s.path) ?: return
-
-        val doc =
-            FileDocumentManager.getInstance()
-                .getDocument(vFile) ?: return
+        val vFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+            .findFileByPath(s.path) ?: return
+        val doc = FileDocumentManager.getInstance().getDocument(vFile) ?: return
 
         WriteCommandAction.runWriteCommandAction(project) {
             replaying = true
@@ -445,5 +571,9 @@ private object TimeRailRecorder {
                 replaying = false
             }
         }
+
+        // Open a new branch from the restored snapshot
+        curBranch = nextBranch++
+        curParent = s.id
     }
 }
