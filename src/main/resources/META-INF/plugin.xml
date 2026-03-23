@@ -1,7 +1,37 @@
 <idea-plugin>
-    <id>com.timerail</id>
+    <id>com.timerail.timerail</id>
     <name>TimeRail</name>
-    <vendor>YourCompany</vendor>
+    <vendor email="dexterpenggm@gmail.com" url="https://github.com/DexterPeng117/TimeRail">Yulin Peng</vendor>
+
+    <description><![CDATA[
+        <p><b>TimeRail</b> — Visual branching code history for IntelliJ IDEA.</p>
+        <p>Snapshot your editor state at any moment and restore it with one click.
+        Snapshots are displayed in an interactive branching tree so you can see exactly
+        how your work evolved and jump back to any point in time.</p>
+        <br/>
+        <b>Features:</b>
+        <ul>
+            <li>📸 Capture editor snapshots (all open tabs) with a single click</li>
+            <li>🌿 Branching history tree — every restore creates a new branch</li>
+            <li>🔍 Zoomable tree view with +/− zoom controls</li>
+            <li>🖼️ Screenshot thumbnails for each snapshot</li>
+            <li>⚡ One-click restore to any past state</li>
+        </ul>
+        <br/>
+        <p>Requires Java 21.</p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <b>1.0.0</b>
+        <ul>
+            <li>Initial release</li>
+            <li>Branching snapshot tree with zoom support</li>
+            <li>Screenshot thumbnails per snapshot</li>
+            <li>One-click restore with auto-close panel</li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
 

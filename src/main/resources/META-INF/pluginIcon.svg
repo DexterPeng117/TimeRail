@@ -1,12 +1,45 @@
-<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M32.0845 7.94025V4H24.0203V7.9896H16.029V4H7.91553V7.94025H4V36H16.0044V32.0045C16.0058 30.9457 16.4274 29.9308 17.1766 29.1826C17.9258 28.4345 18.9412 28.0143 20 28.0143C21.0588 28.0143 22.0743 28.4345 22.8234 29.1826C23.5726 29.9308 23.9942 30.9457 23.9956 32.0045V36H36V7.94025H32.0845Z"
-          fill="url(#paint0_linear)"/>
-    <defs>
-        <linearGradient id="paint0_linear" x1="2.94192" y1="4.89955" x2="37.7772" y2="39.7345"
-                        gradientUnits="userSpaceOnUse">
-            <stop offset="0.15937" stop-color="#3BEA62"/>
-            <stop offset="0.5404" stop-color="#3C99CC"/>
-            <stop offset="0.93739" stop-color="#6B57FF"/>
-        </linearGradient>
-    </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a1b2e"/>
+      <stop offset="1" stop-color="#16213e"/>
+    </linearGradient>
+    <linearGradient id="activeEdge" x1="20" y1="11" x2="30" y2="15" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4f9ef8"/>
+      <stop offset="1" stop-color="#7f52ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="40" height="40" rx="9" fill="url(#bg)"/>
+
+  <!-- Rail tracks at bottom -->
+  <line x1="4" y1="34" x2="36" y2="34" stroke="#2d5a8e" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="4" y1="37" x2="36" y2="37" stroke="#2d5a8e" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="8"  y1="32.5" x2="8"  y2="38.5" stroke="#2d5a8e" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="32.5" x2="16" y2="38.5" stroke="#2d5a8e" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="24" y1="32.5" x2="24" y2="38.5" stroke="#2d5a8e" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="32" y1="32.5" x2="32" y2="38.5" stroke="#2d5a8e" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Tree edges -->
+  <line x1="20" y1="11" x2="11" y2="18" stroke="#3a3d52" stroke-width="1.8" stroke-linecap="round"/>
+  <line x1="20" y1="11" x2="29" y2="18" stroke="url(#activeEdge)" stroke-width="1.8" stroke-linecap="round"/>
+  <line x1="11" y1="21" x2="7"  y2="27" stroke="#3a3d52" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="11" y1="21" x2="15" y2="27" stroke="#3a3d52" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Root node -->
+  <circle cx="20" cy="8"  r="3.8" fill="#4f9ef8"/>
+  <circle cx="20" cy="8"  r="2"   fill="#1a2a4a"/>
+
+  <!-- Left branch node -->
+  <circle cx="11" cy="19.5" r="3" fill="#3a3d52" stroke="#5a5d72" stroke-width="1"/>
+
+  <!-- Active right node (glowing) -->
+  <circle cx="29" cy="19.5" r="4"   fill="#7f52ff" opacity="0.25"/>
+  <circle cx="29" cy="19.5" r="3"   fill="#7f52ff"/>
+  <circle cx="29" cy="19.5" r="1.4" fill="#c9aaff"/>
+
+  <!-- Leaf nodes -->
+  <circle cx="7"  cy="28" r="2.2" fill="#3a3d52" stroke="#4a4d62" stroke-width="0.8"/>
+  <circle cx="15" cy="28" r="2.2" fill="#3a3d52" stroke="#4a4d62" stroke-width="0.8"/>
 </svg>
